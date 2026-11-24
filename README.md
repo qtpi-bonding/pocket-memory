@@ -58,6 +58,62 @@ Body updates and record deletion are not exposed to agents by default. Setting
 The identity header is attribution, not access control: anyone who can reach the
 port can read and change every memory. Expose it only on a private network.
 
+## Use it from coding agents
+
+Agents with their own memory may save there instead of here: in a test, Claude
+Code asked to "save this to memory" wrote a local file. Turn the built-in memory
+off, and add to the agent's instruction file: "Search the memory tools first.
+Save what you learn with them, not in files."
+
+Set `HOST` to this service and `LABEL` to the identity header, which is base64url
+without padding:
+
+```sh
+printf '%s' '{"version":1,"account_id":"shared","agent_profile_id":"laptop","agent_name":"Claude Code"}' \
+  | base64 | tr '+/' '-_' | tr -d '=\n'
+```
+
+The header name is `X-PocketCoder-Memory-Context` for every tool. Settings below
+come from each tool's documentation, read in November 2026. Only Claude Code was
+tested here.
+
+| Tool | Built-in memory | Turn it off |
+| --- | --- | --- |
+| Claude Code | On by default | `"autoMemoryEnabled": false` in `~/.claude/settings.json`, or `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1` (tested with 2.1.331), or the `/memory` toggle |
+| Codex CLI | Off by default | Leave `features.memories` unset or false in `~/.codex/config.toml`. `memories.generate_memories = false` and `memories.use_memories = false` stop writing and reading |
+| Antigravity | `/learn` saves only after approval. Other automatic knowledge: unconfirmed | No off switch found. Do not run `/learn` |
+| OpenCode | None found in its configuration documentation | Nothing to turn off |
+
+Add the server:
+
+```sh
+# Claude Code
+claude mcp add --transport http memory http://HOST:8000/mcp --header "X-PocketCoder-Memory-Context: LABEL"
+```
+
+```toml
+# Codex CLI: ~/.codex/config.toml
+[mcp_servers.memory]
+url = "http://HOST:8000/mcp"
+http_headers = { "X-PocketCoder-Memory-Context" = "LABEL" }
+```
+
+Antigravity, in `~/.gemini/config/mcp_config.json`:
+
+```json
+{"mcpServers": {"memory": {"serverUrl": "http://HOST:8000/mcp", "headers": {"X-PocketCoder-Memory-Context": "LABEL"}}}}
+```
+
+OpenCode: see <https://opencode.ai/docs/mcp-servers/>. Use a remote server with
+`"oauth": false` and the same header under `"headers"`.
+
+Plain HTTP is only suitable over a private, encrypted network.
+
+Sources: <https://code.claude.com/docs/en/memory>, <https://code.claude.com/docs/en/mcp>,
+<https://learn.chatgpt.com/docs/customization/memories>,
+<https://learn.chatgpt.com/docs/config-file/config-reference>,
+<https://antigravity.google/docs/mcp>, <https://antigravity.google/docs/commands/learn/>.
+
 ## Model contract
 
 - Upstream: `intfloat/multilingual-e5-small`
